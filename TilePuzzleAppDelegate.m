@@ -137,6 +137,11 @@ NSString * const kPuzzleImageName = @"TigerPuzzle.png";
     // managed objects represeting the tiles.
     if (didCreateNewStoreFile) {
         [self createTiles: managedObjectContext];
+        if (![managedObjectContext save:&error]) {
+            [[NSApplication sharedApplication] presentError:error];
+            [[NSApplication sharedApplication] terminate:self];
+        }
+        [[managedObjectContext undoManager] removeAllActions];
     }
     
     return managedObjectContext;
@@ -151,6 +156,14 @@ NSString * const kPuzzleImageName = @"TigerPuzzle.png";
 
 - (NSUndoManager *) windowWillReturnUndoManager:(NSWindow *)sender {
 	return [[self managedObjectContext] undoManager];
+}
+
+- (void)windowWillClose:(NSNotification *)aNotification {
+    [self saveAction: self];
+}
+
+- (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)theApplication {
+    return YES;
 }
 
 - (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication *)sender {
@@ -232,13 +245,19 @@ NSString * const kPuzzleImageName = @"TigerPuzzle.png";
     NSFetchRequest *request = [[self managedObjectModel] fetchRequestTemplateForName:@"allTiles"];
     NSError *fetchError;
 	NSArray *fetchedTiles = [[self managedObjectContext] executeFetchRequest:request error:&fetchError];
+
+    // If there is no return value, that's an error
     if (fetchedTiles == nil) {
         [[NSApplication sharedApplication] presentError:fetchError];
         [[NSApplication sharedApplication] terminate:self];
     }
+
+    // Assert if there are fewer tiles than expected
     NSAssert(([fetchedTiles count] == kNumTiles), ([NSString stringWithFormat:@"There should be %d tiles, but there are only %u", kNumTiles, [fetchedTiles count]]));
     
-    // Shuffle the tiles by swapping each tile with another random tile
+    // Shuffle the tiles by swapping each tile with another random tile.  This sample code just performs a simple shuffle
+    // of the tiles in the array by swapping positions:  however, this could result in an unsolvable puzzle because we don't 
+    // caculate the inversion count of the resulting matrix.  A real version of this application should perform this check.
     [[[self managedObjectContext] undoManager] beginUndoGrouping];
 	int i;
 	for (i = 0; i < kNumTiles; ++i) {
